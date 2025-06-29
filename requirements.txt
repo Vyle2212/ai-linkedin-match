@@ -3,4 +3,5 @@ sentence-transformers
 scikit-learn
 PyMuPDF
 python-docx
+transformers
 torch
