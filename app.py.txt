@@ -1,23 +1,31 @@
 import streamlit as st
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-import fitz  # PyMuPDF for PDF text extraction
+import fitz  # PyMuPDF
 
-# Load embedding model once
+# Load model
 @st.cache_resource
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
 
 model = load_model()
 
-st.set_page_config(page_title="📄 Multi-CV Matcher", layout="wide")
-st.title("🤖 Match nhiều CV PDF với 1 JD")
+st.set_page_config(page_title="CV & LinkedIn Matcher", layout="wide")
+st.title("🤖 Match CV PDF & LinkedIn profile với 1 JD")
 
-# Upload multiple CV PDFs
-uploaded_files = st.file_uploader("📁 Chọn nhiều file PDF CV", type="pdf", accept_multiple_files=True)
+st.markdown("### 📝 Nhập Job Description")
+jd_text = st.text_area("Job Description", height=200)
 
-# Enter Job Description
-jd_text = st.text_area("📝 Nhập Job Description", height=200)
+st.markdown("---")
+st.markdown("## 📂 Cách 1: Upload nhiều file PDF CV")
+uploaded_files = st.file_uploader("Chọn file PDF", type="pdf", accept_multiple_files=True)
+
+st.markdown("## 🧑‍💼 Cách 2: Paste nội dung từ LinkedIn")
+linkedin_profiles = st.text_area(
+    "Dán nhiều LinkedIn profile, mỗi profile cách nhau bởi dòng trống",
+    placeholder="Ví dụ:\n\nNguyen Van A - Data Analyst with 5 years in FMCG...\n\nTran Thi B - SAP Consultant, experience in S/4HANA...\n",
+    height=250
+)
 
 def extract_text_from_pdf(uploaded_file):
     text = ""
@@ -27,18 +35,31 @@ def extract_text_from_pdf(uploaded_file):
     return text
 
 if st.button("🔍 Check Match"):
-    if not uploaded_files or not jd_text.strip():
-        st.warning("⚠️ Vui lòng upload ít nhất 1 CV PDF và nhập JD.")
+    if not jd_text.strip():
+        st.warning("⚠️ Vui lòng nhập Job Description.")
     else:
         jd_vec = model.encode([jd_text])[0]
         results = []
+
+        # Match các file PDF
         for file in uploaded_files:
             try:
                 cv_text = extract_text_from_pdf(file)
                 cv_vec = model.encode([cv_text])[0]
                 score = cosine_similarity([cv_vec], [jd_vec])[0][0]
-                results.append({"Tên file": file.name, "Match %": round(score * 100, 2)})
-            except Exception:
-                results.append({"Tên file": file.name, "Match %": "❌ Error đọc PDF"})
+                results.append({"Nguồn": f"📄 {file.name}", "Match %": round(score * 100, 2)})
+            except:
+                results.append({"Nguồn": f"📄 {file.name}", "Match %": "❌ Error đọc PDF"})
+
+        # Match các LinkedIn profile (tách theo 2 dòng trống)
+        profiles = [p.strip() for p in linkedin_profiles.strip().split("\n\n") if p.strip()]
+        for i, profile_text in enumerate(profiles):
+            try:
+                prof_vec = model.encode([profile_text])[0]
+                score = cosine_similarity([prof_vec], [jd_vec])[0][0]
+                results.append({"Nguồn": f"🧑 LinkedIn Profile #{i+1}", "Match %": round(score * 100, 2)})
+            except:
+                results.append({"Nguồn": f"🧑 LinkedIn Profile #{i+1}", "Match %": "❌ Error match"})
+
         st.markdown("### 📊 Kết quả so sánh:")
         st.dataframe(results, use_container_width=True)
